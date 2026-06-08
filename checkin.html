@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>TEKO QR Check-In</title>
+
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;padding:20px;background:#0f1115;color:white;font-family:Arial,sans-serif}
+    .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;gap:12px;flex-wrap:wrap}
+    .title{font-size:30px;font-weight:bold}
+    .subtitle{color:#9ca3af;font-size:13px}
+    .wrap{display:grid;grid-template-columns:420px 1fr;gap:18px;align-items:start}
+    .box{background:#171b23;border:1px solid #2f3643;border-radius:18px;padding:18px}
+    #reader{width:100%;overflow:hidden;border-radius:14px;background:#0f1115;min-height:280px;color:#64748b}
+    .field{margin-bottom:12px}
+    .label{color:#9ca3af;font-size:12px;margin-bottom:4px}
+    .value{font-size:22px;font-weight:bold}
+    .small{font-size:14px;color:#cbd5e1;word-break:break-word}
+    button{border:0;border-radius:10px;padding:12px 16px;font-weight:bold;cursor:pointer}
+    button:disabled{background:#374151!important;color:#9ca3af!important;cursor:not-allowed!important}
+    .btn{background:#263244;color:white;border:1px solid #3b4658}
+    .start{background:#2563eb;color:white}
+    .front{background:#7c3aed;color:white}
+    .stop{background:#dc2626;color:white}
+    .manual{background:#0891b2;color:white}
+    .save{background:#16a34a;color:white}
+    input{width:100%;padding:13px;background:#0f1115;border:1px solid #2f3643;border-radius:12px;color:white;font-size:15px}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    .result{border-radius:18px;padding:24px;border:1px solid #2f3643;background:#171b23;min-height:320px}
+    .state{font-size:38px;font-weight:bold;margin-bottom:18px}
+    .READY{color:#93c5fd}
+    .VALID{color:#22c55e}
+    .ALREADY{color:#f59e0b}
+    .INVALID,.ERROR{color:#ef4444}
+    .badge{display:inline-block;padding:6px 10px;border-radius:999px;font-weight:bold;font-size:12px}
+    .b-valid{background:#14532d;color:#bbf7d0}
+    .b-warn{background:#854d0e;color:#fde68a}
+    .b-error{background:#7f1d1d;color:#fecaca}
+    .scanlog{margin-top:18px}
+    .logitem{padding:10px 0;border-bottom:1px solid #2f3643;color:#cbd5e1;font-size:13px}
+    .hint{font-size:12px;color:#94a3b8;line-height:1.5;margin-top:8px}
+    .config{margin-bottom:18px}
+    @media(max-width:900px){
+      body{padding:12px}
+      .wrap{grid-template-columns:1fr}
+      .title{font-size:24px}
+      .state{font-size:28px}
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="header">
+    <div>
+      <div class="title">TEKO QR CHECK-IN</div>
+      <div class="subtitle">Standalone scanner for GitHub Pages</div>
+    </div>
+    <button class="btn" onclick="resetResult()">RESET</button>
+  </div>
+
+  <div class="box config">
+    <div class="field">
+      <div class="label">TEKO Web App URL</div>
+      <input id="webAppUrl" placeholder="Paste URL Web App Apps Script di sini">
+      <div class="hint">
+        Contoh: https://script.google.com/macros/s/AKfycbxxxx/exec
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="save" onclick="saveConfig()">SAVE URL</button>
+      <button class="btn" onclick="loadConfig()">LOAD URL</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+
+    <div class="box">
+      <div class="field">
+        <div class="label">Petugas / Gate</div>
+        <input id="petugas" value="Gate A" placeholder="Contoh: Gate A / Admin 1">
+      </div>
+
+      <div class="actions">
+        <button class="start" onclick="startBackCamera()">START BACK CAMERA</button>
+        <button class="front" onclick="startFrontCamera()">FRONT CAMERA</button>
+        <button class="stop" onclick="stopScanner()">STOP</button>
+      </div>
+
+      <div class="hint">
+        GitHub Pages memakai HTTPS, jadi browser HP seharusnya menampilkan permission kamera.
+      </div>
+
+      <div style="height:14px"></div>
+
+      <div id="reader">Camera preview akan tampil di sini</div>
+
+      <div class="field" style="margin-top:18px">
+        <div class="label">Manual Kode Tiket</div>
+        <input id="manualKode" placeholder="Contoh: TKT-2026-0006">
+      </div>
+
+      <div class="actions">
+        <button class="manual" onclick="manualCheckin()">CHECK-IN MANUAL</button>
+      </div>
+
+      <div class="scanlog" id="scanLog"></div>
+    </div>
+
+    <div class="result">
+      <div id="state" class="state READY">READY TO SCAN</div>
+
+      <div class="field">
+        <div class="label">Status</div>
+        <div id="statusText" class="value">Isi Web App URL, lalu klik START BACK CAMERA.</div>
+      </div>
+
+      <div class="field"><div class="label">Nama</div><div id="nama" class="value">-</div></div>
+      <div class="field"><div class="label">Event</div><div id="event" class="value">-</div></div>
+      <div class="field"><div class="label">Kode Tiket</div><div id="kodeTiket" class="small">-</div></div>
+      <div class="field"><div class="label">Kode Daftar</div><div id="kodeDaftar" class="small">-</div></div>
+      <div class="field"><div class="label">Check-In Time</div><div id="checkinTime" class="small">-</div></div>
+      <div class="field"><div class="label">Check-In By</div><div id="checkinBy" class="small">-</div></div>
+    </div>
+
+  </div>
+
+<script>
+let html5QrCode = null;
+let scannerRunning = false;
+let scanLocked = false;
+
+const CONFIG_KEY = "TEKO_WEB_APP_URL";
+
+function saveConfig(){
+  const url = document.getElementById("webAppUrl").value.trim();
+  if(!url){
+    showError("Web App URL masih kosong.");
+    return;
+  }
+
+  localStorage.setItem(CONFIG_KEY, url);
+  setReady("Web App URL tersimpan.");
+}
+
+function loadConfig(){
+  const url = localStorage.getItem(CONFIG_KEY) || "";
+  document.getElementById("webAppUrl").value = url;
+
+  if(url){
+    setReady("Web App URL berhasil dimuat.");
+  }
+}
+
+function getWebAppUrl(){
+  return document.getElementById("webAppUrl").value.trim() || localStorage.getItem(CONFIG_KEY) || "";
+}
+
+function startBackCamera(){
+  startScannerWithFacingMode("environment");
+}
+
+function startFrontCamera(){
+  startScannerWithFacingMode("user");
+}
+
+function startScannerWithFacingMode(facingMode){
+  if(scannerRunning) return;
+
+  if(typeof Html5Qrcode === "undefined"){
+    showError("Library html5-qrcode gagal dimuat. Cek koneksi internet.");
+    return;
+  }
+
+  html5QrCode = new Html5Qrcode("reader");
+
+  setReady("Membuka kamera dan meminta permission...");
+
+  html5QrCode.start(
+    { facingMode: facingMode },
+    {
+      fps: 10,
+      qrbox: { width: 260, height: 260 }
+    },
+    onScanSuccess,
+    onScanFailure
+  ).then(() => {
+    scannerRunning = true;
+    setReady("Scanner aktif. Arahkan kamera ke QR tiket.");
+  }).catch(err => {
+    showError("Gagal membuka kamera: " + readableCameraError(err));
+  });
+}
+
+function readableCameraError(err){
+  const msg = String(err || "");
+
+  if(msg.includes("NotAllowedError") || msg.includes("Permission")) {
+    return "Permission kamera ditolak. Cek izin kamera browser.";
+  }
+
+  if(msg.includes("NotFoundError")) {
+    return "Kamera tidak ditemukan.";
+  }
+
+  if(msg.includes("NotReadableError")) {
+    return "Kamera sedang dipakai aplikasi lain. Tutup kamera/WA/Zoom lalu coba lagi.";
+  }
+
+  if(msg.includes("OverconstrainedError")) {
+    return "Kamera belakang tidak cocok. Coba FRONT CAMERA.";
+  }
+
+  return msg;
+}
+
+function stopScanner(){
+  if(!html5QrCode || !scannerRunning) {
+    setReady("Scanner belum aktif.");
+    return;
+  }
+
+  html5QrCode.stop().then(() => {
+    scannerRunning = false;
+    html5QrCode.clear();
+    html5QrCode = null;
+    setReady("Scanner dihentikan.");
+  }).catch(err => {
+    showError("Gagal stop scanner: " + err);
+  });
+}
+
+function onScanFailure(error){
+  // silent
+}
+
+function onScanSuccess(decodedText){
+  if(scanLocked) return;
+
+  scanLocked = true;
+
+  const kodeTiket = extractKodeTiket(decodedText);
+
+  if(!kodeTiket){
+    showInvalid({ message: "QR tidak valid. Kode tiket tidak ditemukan." });
+    setTimeout(() => scanLocked = false, 1800);
+    return;
+  }
+
+  doCheckin(kodeTiket);
+}
+
+function manualCheckin(){
+  const kode = document.getElementById("manualKode").value.trim();
+  if(!kode){
+    showError("Masukkan kode tiket dulu.");
+    return;
+  }
+  doCheckin(kode);
+}
+
+function doCheckin(kodeTiket){
+  const webAppUrl = getWebAppUrl();
+
+  if(!webAppUrl){
+    showError("Web App URL belum diisi.");
+    scanLocked = false;
+    return;
+  }
+
+  const petugas = document.getElementById("petugas").value.trim() || "Gate";
+
+  setProcessing(kodeTiket);
+
+  callTekoApiJsonp(webAppUrl, kodeTiket, petugas)
+    .then(res => {
+      renderCheckinResult(res);
+      addLog(res);
+      setTimeout(() => { scanLocked = false; }, 2000);
+    })
+    .catch(err => {
+      showError(err.message || err);
+      setTimeout(() => { scanLocked = false; }, 2000);
+    });
+}
+
+function callTekoApiJsonp(webAppUrl, kodeTiket, petugas){
+  return new Promise((resolve, reject) => {
+    const callbackName = "teko_cb_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
+
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("Timeout memanggil TEKO API."));
+    }, 20000);
+
+    function cleanup(){
+      clearTimeout(timeout);
+      delete window[callbackName];
+      if(script && script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    window[callbackName] = function(data){
+      cleanup();
+      resolve(data);
+    };
+
+    const sep = webAppUrl.includes("?") ? "&" : "?";
+    const url =
+      webAppUrl + sep +
+      "api=checkin" +
+      "&kodeTiket=" + encodeURIComponent(kodeTiket) +
+      "&petugas=" + encodeURIComponent(petugas) +
+      "&callback=" + encodeURIComponent(callbackName) +
+      "&_=" + Date.now();
+
+    const script = document.createElement("script");
+    script.src = url;
+    script.onerror = function(){
+      cleanup();
+      reject(new Error("Gagal memanggil TEKO API. Cek URL Web App / deploy permission."));
+    };
+
+    document.body.appendChild(script);
+  });
+}
+
+function extractKodeTiket(text){
+  const raw = String(text || "").trim();
+  if(!raw) return "";
+
+  try{
+    const obj = JSON.parse(raw);
+    if(obj.kodeTiket) return String(obj.kodeTiket).trim();
+  }catch(e){}
+
+  const match = raw.match(/TKT-\d{4}-\d{4}/i);
+  if(match) return match[0].toUpperCase();
+
+  return raw;
+}
+
+function renderCheckinResult(res){
+  if(!res) {
+    showError("Response kosong dari server.");
+    return;
+  }
+
+  document.getElementById("nama").innerText = res.nama || "-";
+  document.getElementById("event").innerText = res.namaEvent || "-";
+  document.getElementById("kodeTiket").innerText = res.kodeTiket || "-";
+  document.getElementById("kodeDaftar").innerText = res.kodeDaftar || "-";
+  document.getElementById("checkinTime").innerText = res.checkinTime || "-";
+  document.getElementById("checkinBy").innerText = res.checkinBy || "-";
+
+  const state = document.getElementById("state");
+  const statusText = document.getElementById("statusText");
+
+  state.className = "state";
+
+  if(res.result === "VALID"){
+    state.classList.add("VALID");
+    state.innerText = "✓ CHECK-IN SUCCESS";
+    statusText.innerHTML = `<span class="badge b-valid">VALID TICKET</span>`;
+  } else if(res.result === "ALREADY_CHECKED_IN"){
+    state.classList.add("ALREADY");
+    state.innerText = "⚠ SUDAH CHECK-IN";
+    statusText.innerHTML = `<span class="badge b-warn">ALREADY USED</span>`;
+  } else {
+    state.classList.add("INVALID");
+    state.innerText = "✕ INVALID TICKET";
+    statusText.innerHTML = `<span class="badge b-error">${safe(res.message || "INVALID")}</span>`;
+  }
+}
+
+function setProcessing(kode){
+  const state = document.getElementById("state");
+  state.className = "state READY";
+  state.innerText = "PROCESSING...";
+  document.getElementById("statusText").innerText = "Mengecek tiket " + kode + "...";
+}
+
+function setReady(msg){
+  const state = document.getElementById("state");
+  state.className = "state READY";
+  state.innerText = "READY TO SCAN";
+  document.getElementById("statusText").innerText = msg || "Menunggu scan QR...";
+}
+
+function showError(msg){
+  const state = document.getElementById("state");
+  state.className = "state ERROR";
+  state.innerText = "ERROR";
+  document.getElementById("statusText").innerHTML = `<span class="badge b-error">${safe(msg)}</span>`;
+}
+
+function showInvalid(data){
+  const state = document.getElementById("state");
+  state.className = "state INVALID";
+  state.innerText = "✕ INVALID QR";
+  document.getElementById("statusText").innerHTML = `<span class="badge b-error">${safe(data.message || "Invalid QR")}</span>`;
+}
+
+function resetResult(){
+  scanLocked = false;
+  setReady("Menunggu scan QR...");
+  document.getElementById("nama").innerText = "-";
+  document.getElementById("event").innerText = "-";
+  document.getElementById("kodeTiket").innerText = "-";
+  document.getElementById("kodeDaftar").innerText = "-";
+  document.getElementById("checkinTime").innerText = "-";
+  document.getElementById("checkinBy").innerText = "-";
+}
+
+function addLog(res){
+  const log = document.getElementById("scanLog");
+  const div = document.createElement("div");
+  div.className = "logitem";
+  div.innerHTML = `
+    <b>${safe(res.result || "-")}</b> -
+    ${safe(res.kodeTiket || "-")} -
+    ${safe(res.nama || "-")} -
+    ${safe(res.namaEvent || "-")}
+  `;
+  log.prepend(div);
+}
+
+function safe(v){
+  return String(v ?? "").replace(/[<>&"]/g, s => ({
+    "<":"&lt;",
+    ">":"&gt;",
+    "&":"&amp;",
+    '"':"&quot;"
+  }[s]));
+}
+
+loadConfig();
+</script>
+
+</body>
+</html>
