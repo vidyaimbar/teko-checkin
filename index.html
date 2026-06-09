@@ -72,7 +72,62 @@ function mountStatusCard(){const tpl=document.getElementById("statusTemplate").c
 function getWebAppUrl(){return TEKO_WEB_APP_URL;}
 function startBackCamera(){startScannerWithFacingMode("environment")}
 function startFrontCamera(){startScannerWithFacingMode("user")}
-function startScannerWithFacingMode(facingMode){if(scannerRunning)return;if(typeof Html5Qrcode==="undefined"){showError("Library html5-qrcode gagal dimuat. Cek koneksi internet.");return}html5QrCode=new Html5Qrcode("reader");setReady("Membuka kamera dan meminta permission...");html5QrCode.start({facingMode:facingMode},{fps:8,qrbox:{width:250,height:250}},onScanSuccess,onScanFailure).then(()=>{scannerRunning=true;setReady("Scanner aktif. Arahkan kamera ke QR tiket.")}).catch(err=>showError("Gagal membuka kamera: "+readableCameraError(err)))}
+function startScannerWithFacingMode(facingMode){
+  if(scannerRunning)return;
+
+  if(typeof Html5Qrcode==="undefined"){
+    showError("Library html5-qrcode gagal dimuat. Cek koneksi internet.");
+    return;
+  }
+
+  html5QrCode = new Html5Qrcode("reader");
+  setReady("Mencari kamera...");
+
+  Html5Qrcode.getCameras().then(cameras=>{
+    if(!cameras || cameras.length===0){
+      showError("Kamera tidak ditemukan.");
+      return;
+    }
+
+    let selectedCamera = cameras[0].id;
+
+    if(facingMode==="environment"){
+      const backCam = cameras.find(c =>
+        String(c.label || "").toLowerCase().includes("back") ||
+        String(c.label || "").toLowerCase().includes("rear") ||
+        String(c.label || "").toLowerCase().includes("environment")
+      );
+      if(backCam) selectedCamera = backCam.id;
+      else selectedCamera = cameras[cameras.length - 1].id;
+    }
+
+    if(facingMode==="user"){
+      const frontCam = cameras.find(c =>
+        String(c.label || "").toLowerCase().includes("front") ||
+        String(c.label || "").toLowerCase().includes("user")
+      );
+      if(frontCam) selectedCamera = frontCam.id;
+    }
+
+    setReady("Membuka kamera...");
+
+    return html5QrCode.start(
+      selectedCamera,
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 250 }
+      },
+      onScanSuccess,
+      onScanFailure
+    );
+
+  }).then(()=>{
+    scannerRunning = true;
+    setReady("Scanner aktif. Arahkan kamera ke QR tiket.");
+  }).catch(err=>{
+    showError("Gagal membuka kamera: " + readableCameraError(err));
+  });
+}
 function readableCameraError(err){const msg=String(err||"");if(msg.includes("NotAllowedError")||msg.includes("Permission"))return"Permission kamera ditolak. Cek izin kamera browser.";if(msg.includes("NotFoundError"))return"Kamera tidak ditemukan.";if(msg.includes("NotReadableError"))return"Kamera sedang dipakai aplikasi lain. Tutup kamera/WA/Zoom lalu coba lagi.";if(msg.includes("OverconstrainedError"))return"Kamera belakang tidak cocok. Coba FRONT CAMERA.";return msg}
 function stopScanner(){if(!html5QrCode||!scannerRunning){setReady("Scanner belum aktif.");return}html5QrCode.stop().then(()=>{scannerRunning=false;html5QrCode.clear();html5QrCode=null;setReady("Scanner dihentikan.")}).catch(err=>showError("Gagal stop scanner: "+err))}
 function onScanFailure(error){}
